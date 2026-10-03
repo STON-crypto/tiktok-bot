@@ -1,80 +1,50 @@
 import os
-import re
 import requests
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
-# Obtener el token directamente de las variables de entorno de la nube (Koyeb)
+# Obtiene el token desde las variables de entorno de Render
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
-# Función para extraer y limpiar el enlace de TikTok (ya sea directo o de tipo vm.tiktok.com)
-def extract_tiktok_url(text: str) -> str:
-    # Patrón RegEx robusto para encontrar URLs de TikTok en cualquier texto
-    url_pattern = r'https?://(?:m|www|vm|vt)?\.?tiktok\.com/[^\s]+'
-    match = re.search(url_pattern, text)
-    if match:
-        raw_url = match.group(0)
-        # Si es un enlace corto, devolvemos tal cual para que la API lo resuelva
-        if "vm.tiktok.com" in raw_url or "vt.tiktok.com" in raw_url:
-            return raw_url
-        # Si es un enlace largo, limpiamos los parámetros de rastreo (lo que viene después del signo ?)
-        clean_url = raw_url.split('?')[0]
-        return clean_url
-    return None
-
-# Manejador principal cuando el usuario envía un mensaje con un enlace de TikTok
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    tiktok_url = extract_tiktok_url(text)
-
-    if not tiktok_url:
-        # Si no manda un enlace válido, no hacemos nada o podemos ignorarlo
-        return
-
-    # Enviamos un mensaje de aviso mientras procesamos la descarga en streaming
-    processing_msg = await update.message.reply_text("🔄 Procesando video sin marca de agua...")
-
-    try:
-        # Consultamos a la API pública de tikwm para obtener el video en streaming directo
-        api_url = f"https://www.tikwm.com/api/?url={tiktok_url}"
-        response = requests.get(api_url)
-        data = response.json()
-
-        if data.get("code") == 0:
-            # Obtenemos la URL directa del video libre de marca de agua
-            video_url = data["data"]["play"]
-            author = data["data"]["author"]["nickname"]
-            title = data["data"]["title"]
-
-            caption = f"🎬 **{title}**\n👤 Autor: {author}\n🤖 *Descargado por tu Bot 24/7*"
-
-            # Enviamos el video a Telegram usando el enlace directo (arquitectura zero-storage, sin gastar disco)
-            await update.message.reply_video(
-                video=video_url,
-                caption=caption,
-                parse_mode="Markdown"
-            )
-            # Borramos el mensaje de "procesando" para dejar el chat limpio
-            await processing_msg.delete()
-        else:
-            await processing_msg.edit_text("❌ Error: No se pudo extraer el video. Intenta con otro enlace.")
+    
+    # Verifica si el mensaje contiene un enlace de TikTok
+    if "tiktok.com" in text or "vm.tiktok.com" in text:
+        await update.message.reply_text("⏳ Procesando enlace de TikTok...")
+        try:
+            # Petición a la API gratuita de TikWM para obtener el video sin marca de agua
+            api_url = f"https://www.tikwm.com/api/?url={text}"
+            response = requests.get(api_url).json()
             
-    except Exception as e:
-        await processing_msg.edit_text(f"❌ Ocurrió un error inesperado al procesar el video.")
+            if response.get("code") == 0:
+                # Extrae el enlace directo del video y el título
+                video_url = response["data"]["play"]
+                title = response["data"].get("title", "TikTok sin marca de agua")
+                
+                # Envía el video directamente a Telegram usando la URL (Cero almacenamiento local)
+                await update.message.reply_video(video=video_url, caption=title)
+            else:
+                await update.message.reply_text("❌ No pude obtener el video. Asegúrate de que el enlace sea público y válido.")
+        except Exception as e:
+            await update.message.reply_text("⚠️ Ocurrió un error inesperado al conectar con el servicio.")
+    else:
+        await update.message.reply_text("👋 ¡Hola! Envíame un enlace de TikTok y te lo descargo sin marca de agua.")
 
 def main():
     if not TOKEN:
-        print("Error: No se encontró la variable de entorno TELEGRAM_TOKEN.")
+        print("Error: TELEGRAM_TOKEN no está configurado.")
         return
 
-    # Inicializamos el bot con la versión moderna de python-telegram-bot
-    app = ApplicationBuilder().token(TOKEN).build()
+    # Construye la aplicación del bot
+    application = ApplicationBuilder().token(TOKEN).build()
 
-    # Filtramos cualquier mensaje de texto que contenga un enlace de TikTok
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+    # Manejador para los mensajes de texto
+    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-    print("🤖 Bot iniciado y listo para operar en la nube...")
-    app.run_polling()
+    # Inicia el bot
+    print("El bot de TikTok está corriendo...")
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
