@@ -1,13 +1,12 @@
 import os
 import requests
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
 # Obtiene el token desde las variables de entorno de Render
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Validamos que el mensaje tenga texto
     if not update.message or not update.message.text:
         return
         
@@ -26,7 +25,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 video_url = response["data"]["play"]
                 title = response["data"].get("title", "TikTok sin marca de agua")
                 
-                # Envía el video directamente a Telegram usando la URL (Cero almacenamiento local)
+                # Envía el video directamente a Telegram usando la URL
                 await update.message.reply_video(video=video_url, caption=title)
             else:
                 await update.message.reply_text("❌ No pude obtener el video. Asegúrate de que el enlace sea público y válido.")
@@ -40,13 +39,13 @@ def main():
         print("Error: TELEGRAM_TOKEN no está configurado.")
         return
 
-    # Construye la aplicación usando Application.builder() que es el estándar actual
-    application = Application.builder().token(TOKEN).build()
+    # Construye la aplicación usando ApplicationBuilder estándar
+    application = ApplicationBuilder().token(TOKEN).build()
 
     # Manejador para los mensajes de texto
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-    # Inicia el bot de forma limpia y automática
+    # Inicia el bot
     print("El bot de TikTok está corriendo...")
     application.run_polling()
 
