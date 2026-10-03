@@ -1,12 +1,16 @@
 import os
 import requests
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
 # Obtiene el token desde las variables de entorno de Render
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Validamos que el mensaje tenga texto
+    if not update.message or not update.message.text:
+        return
+        
     text = update.message.text
     
     # Verifica si el mensaje contiene un enlace de TikTok
@@ -36,13 +40,13 @@ def main():
         print("Error: TELEGRAM_TOKEN no está configurado.")
         return
 
-    # Construye la aplicación del bot
-    application = ApplicationBuilder().token(TOKEN).build()
+    # Construye la aplicación usando Application.builder() que es el estándar actual
+    application = Application.builder().token(TOKEN).build()
 
     # Manejador para los mensajes de texto
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-    # Inicia el bot
+    # Inicia el bot de forma limpia y automática
     print("El bot de TikTok está corriendo...")
     application.run_polling()
 
