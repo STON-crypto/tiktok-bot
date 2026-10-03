@@ -9,9 +9,9 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
-        
+
     text = update.message.text
-    
+
     # Verifica si el mensaje contiene un enlace de TikTok
     if "tiktok.com" in text or "vm.tiktok.com" in text:
         await update.message.reply_text("⏳ Procesando enlace de TikTok...")
@@ -19,22 +19,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Petición a la API gratuita de TikWM para obtener el video sin marca de agua
             api_url = f"https://www.tikwm.com/api/?url={text}"
             response = requests.get(api_url).json()
-            
+
             if response.get("code") == 0:
                 # Extrae el enlace directo del video y el título
                 video_url = response["data"]["play"]
                 title = response["data"].get("title", "TikTok sin marca de agua")
-                
-                # Envía el video directamente a Telegram usando la URL
+
+                # Envia el video directamente a Telegram usando la URL
                 await update.message.reply_video(video=video_url, caption=title)
             else:
                 await update.message.reply_text("❌ No pude obtener el video. Asegúrate de que el enlace sea público y válido.")
         except Exception as e:
             await update.message.reply_text("⚠️ Ocurrió un error inesperado al conectar con el servicio.")
     else:
-        await update.message.reply_text("👋 ¡Hola! Envíame un enlace de TikTok y te lo descargo sin marca de agua.")
+        await update.message.reply_text("👋 ¡Hola! Enviame un enlace de TikTok y te lo descargo sin marca de agua.")
 
-def main():
+async def main():
     if not TOKEN:
         print("Error: TELEGRAM_TOKEN no está configurado.")
         return
@@ -45,9 +45,17 @@ def main():
     # Manejador para los mensajes de texto
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-    # Inicia el bot
+    # Inicia el bot de forma asíncrona correcta para evitar errores de bucle de eventos
     print("El bot de TikTok está corriendo...")
-    application.run_polling()
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()
+
+    # Mantiene el bot corriendo de forma indefinida
+    import asyncio
+    stop_signal = asyncio.get_event_loop().create_future()
+    await stop_signal
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())
